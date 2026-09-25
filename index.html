@@ -906,12 +906,12 @@
     <header class="header-bar">
       <div class="brand-title">
         <span>🇯🇵 N5日文單字閃卡</span>
-        <span class="brand-badge" style="background:#15803D;">v2.0 慢速版</span>
+        <span class="brand-badge" style="background:#15803D;">v3.0 逐音教學版</span>
       </div>
 
       <div class="top-actions">
-        <button class="icon-btn" id="speedToggleBtn" title="點擊切換語速" style="background:#FEF3C7;border-color:#FCD34D;color:#92400E;font-weight:700;">
-          <span id="speedIcon">🐢</span> <span id="speedText">0.55x 極慢</span>
+        <button class="icon-btn" id="speedToggleBtn" title="點擊切換語速模式" style="background:#FEF3C7;border-color:#FCD34D;color:#92400E;font-weight:800;box-shadow:0 2px 8px rgba(245,158,11,0.2);">
+          <span id="speedIcon">🐢</span> <span id="speedText">逐音拆解 (超慢)</span>
         </button>
         <button class="icon-btn" id="shuffleBtn" title="打亂單字順序">
           <span>🔀</span> 洗牌
@@ -1152,7 +1152,8 @@
     let currentIndex = 0;
     let isFlipped = false;
     let currentTab = 'csv'; // 'csv' or 'json'
-    let currentSpeechRate = 0.55; // 預設 0.70 超清晰慢速，專為初學者聽清每一個音節設計
+    // 語速模式: 'decompose' (逐音拆解), 'slow' (慢速朗讀), 'normal' (自然語速)
+    let currentSpeechMode = 'decompose'; 
 
     function loadWords() {
       try {
@@ -1188,36 +1189,91 @@
     }
 
     /* ====================================================
-       3. Web Speech API (日語真實發音)
+       3. 日語真實發音（突破 iOS Safari 限制的音節拆解技術）
     ==================================================== */
     let jaVoice = null;
 
+    function getJapaneseVoice() {
+      if (!('speechSynthesis' in window)) return null;
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices || voices.length === 0) return null;
+      return voices.find(v => v.lang === 'ja-JP' || v.lang.startsWith('ja') || v.lang.includes('JP')) || null;
+    }
+
     function initSpeechVoices() {
       if (!('speechSynthesis' in window)) return;
-      const loadVoice = () => {
-        const voices = window.speechSynthesis.getVoices();
-        jaVoice = voices.find(v => v.lang === 'ja-JP' || v.lang.startsWith('ja')) || null;
-      };
-      loadVoice();
+      const update = () => { jaVoice = getJapaneseVoice(); };
+      update();
       if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = loadVoice;
+        window.speechSynthesis.onvoiceschanged = update;
       }
     }
 
-    function speakText(text, btnElement = null) {
+    // 將假名拆解為獨立拍（音節），保留拗音（如「きょ」「しゃ」）與促音
+    function decomposeKana(kana) {
+      if (!kana) return [];
+      const smallKana = new Set(['ぁ','ぃ','ぅ','ぇ','ぉ','っ','ゃ','ゅ','ょ','ゎ','ァ','ィ','ゥ','ェ','ォ','ッ','ャ','ュ','ョ','ヮ']);
+      const moras = [];
+      for (let i = 0; i < kana.length; i++) {
+        const char = kana[i];
+        if (moras.length > 0 && smallKana.has(char)) {
+          moras[moras.length - 1] += char;
+        } else {
+          moras.push(char);
+        }
+      }
+      return moras;
+    }
+
+    // 依據當前模式組裝發音文字（透過日文標點強制 iOS 引擎停頓）
+    function buildSpokenText(kanaText, isSentence = false) {
+      if (isSentence) {
+        return kanaText; // 例句整句朗讀
+      }
+      const moras = decomposeKana(kanaText);
+      if (moras.length <= 1) return kanaText;
+
+      if (currentSpeechMode === 'decompose') {
+        // 模式 1：逐音拆解【最慢、最清晰】
+        // 例如：「い…… く…… いく！」每個假名分開清楚唸出，最後再帶一次整詞
+        return moras.join('、　') + '。……　' + kanaText;
+      } else if (currentSpeechMode === 'slow') {
+        // 模式 2：慢速停頓
+        // 例如：「い、く」音節間具備明確頓挫
+        return moras.join('、 ');
+      } else {
+        // 模式 3：自然正常速度
+        return kanaText;
+      }
+    }
+
+    function speakText(rawText, btnElement = null, isSentence = false) {
       if (!('speechSynthesis' in window)) {
         showToast("⚠️ 您的瀏覽器不支援語音播放");
         return;
       }
 
-      window.speechSynthesis.cancel(); // 停止先前的朗讀
+      window.speechSynthesis.cancel(); // 立即中斷先前的播放
 
-      const utterance = new SpeechSynthesisUtterance(text);
+      const spokenText = buildSpokenText(rawText, isSentence);
+      const utterance = new SpeechSynthesisUtterance(spokenText);
       utterance.lang = 'ja-JP';
-      utterance.rate = currentSpeechRate; // 套用當前慢速設定 (0.70x)
+
+      // 針對三種模式配置速率 (rate 在 iOS 上配合音節標點發揮極限效果)
+      if (currentSpeechMode === 'decompose') {
+        utterance.rate = 0.35; // 極致慢速
+      } else if (currentSpeechMode === 'slow') {
+        utterance.rate = 0.55; // 慢速
+      } else {
+        utterance.rate = 0.85; // 正常
+      }
+
       utterance.pitch = 1.0;
-      if (jaVoice) {
-        utterance.voice = jaVoice;
+
+      // 每次播放即時刷新尋找日文語音（克服 iOS 延遲加載問題）
+      const voice = jaVoice || getJapaneseVoice();
+      if (voice) {
+        utterance.voice = voice;
       }
 
       if (btnElement) {
@@ -1610,23 +1666,26 @@
       speakText(word.kana || word.kanji, e.currentTarget);
     });
 
-    // 語速切換按鈕 (3段調速：0.55x 極慢 -> 0.70x 慢速 -> 0.85x 標準)
+    // 語速模式切換 (逐音拆解 -> 慢速停頓 -> 自然整詞)
     document.getElementById('speedToggleBtn').addEventListener('click', () => {
-      if (currentSpeechRate === 0.55) {
-        currentSpeechRate = 0.70;
-        document.getElementById('speedIcon').textContent = '🚶';
-        document.getElementById('speedText').textContent = '0.70x 慢速';
-        showToast('🚶 語速：0.70x 慢速');
-      } else if (currentSpeechRate === 0.70) {
-        currentSpeechRate = 0.85;
-        document.getElementById('speedIcon').textContent = '🐰';
-        document.getElementById('speedText').textContent = '0.85x 標準';
-        showToast('🐰 語速：0.85x 標準');
+      const icon = document.getElementById('speedIcon');
+      const text = document.getElementById('speedText');
+
+      if (currentSpeechMode === 'decompose') {
+        currentSpeechMode = 'slow';
+        icon.textContent = '🚶';
+        text.textContent = '慢速停頓';
+        showToast('🚶【慢速模式】音節帶微停頓');
+      } else if (currentSpeechMode === 'slow') {
+        currentSpeechMode = 'normal';
+        icon.textContent = '🐰';
+        text.textContent = '自然整詞';
+        showToast('🐰【自然模式】正常語速整詞連讀');
       } else {
-        currentSpeechRate = 0.55;
-        document.getElementById('speedIcon').textContent = '🐢';
-        document.getElementById('speedText').textContent = '0.55x 極慢';
-        showToast('🐢 語速：0.55x 極慢（逐音清晰）');
+        currentSpeechMode = 'decompose';
+        icon.textContent = '🐢';
+        text.textContent = '逐音拆解 (超慢)';
+        showToast('🐢【逐音拆解】每個音節分開唸，最後帶整詞');
       }
     });
 
@@ -1636,7 +1695,7 @@
       if (currentQueue.length === 0) return;
       const word = currentQueue[currentIndex];
       if (word.exampleJa) {
-        speakText(word.exampleJa, e.currentTarget);
+        speakText(word.exampleJa, e.currentTarget, true);
       }
     });
 
@@ -1781,7 +1840,7 @@
     if ('caches' in window) {
       caches.keys().then((names) => {
         names.forEach((name) => {
-          if (name !== 'n5-flashcards-v4') caches.delete(name);
+          if (name !== 'n5-flashcards-v5') caches.delete(name);
         });
       });
     }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'n5-flashcards-v4';
+const CACHE_NAME = 'n5-flashcards-v5';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();

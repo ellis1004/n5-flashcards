@@ -1,13 +1,6 @@
-const CACHE_NAME = 'n5-flashcards-v2';
-const ASSETS = [
-  './',
-  './index.html'
-];
+const CACHE_NAME = 'n5-flashcards-v4';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-  );
   self.skipWaiting();
 });
 
@@ -15,17 +8,25 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.map((k) => {
-          if (k !== CACHE_NAME) return caches.delete(k);
-        })
+        keys.map((k) => caches.delete(k))
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
+// Network-First: 永遠優先從雲端拿最新版，斷網時才讀取離線快取
 self.addEventListener('fetch', (e) => {
   e.respondWith(
-    caches.match(e.request).then((res) => res || fetch(e.request))
+    fetch(e.request)
+      .then((response) => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(e.request, clone);
+          });
+        }
+        return response;
+      })
+      .catch(() => caches.match(e.request))
   );
 });

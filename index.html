@@ -906,12 +906,12 @@
     <header class="header-bar">
       <div class="brand-title">
         <span>🇯🇵 N5日文單字閃卡</span>
-        <span class="brand-badge">iPad版</span>
+        <span class="brand-badge" style="background:#15803D;">v2.0 慢速版</span>
       </div>
 
       <div class="top-actions">
-        <button class="icon-btn" id="speedToggleBtn" title="點擊切換朗讀語速">
-          <span id="speedIcon">🐢</span> <span id="speedText">0.7x 慢速</span>
+        <button class="icon-btn" id="speedToggleBtn" title="點擊切換語速" style="background:#FEF3C7;border-color:#FCD34D;color:#92400E;font-weight:700;">
+          <span id="speedIcon">🐢</span> <span id="speedText">0.55x 極慢</span>
         </button>
         <button class="icon-btn" id="shuffleBtn" title="打亂單字順序">
           <span>🔀</span> 洗牌
@@ -1152,7 +1152,7 @@
     let currentIndex = 0;
     let isFlipped = false;
     let currentTab = 'csv'; // 'csv' or 'json'
-    let currentSpeechRate = 0.70; // 預設 0.70 超清晰慢速，專為初學者聽清每一個音節設計
+    let currentSpeechRate = 0.55; // 預設 0.70 超清晰慢速，專為初學者聽清每一個音節設計
 
     function loadWords() {
       try {
@@ -1610,18 +1610,23 @@
       speakText(word.kana || word.kanji, e.currentTarget);
     });
 
-    // 語速切換按鈕 (0.7x 慢速 <-> 0.85x 標準)
+    // 語速切換按鈕 (3段調速：0.55x 極慢 -> 0.70x 慢速 -> 0.85x 標準)
     document.getElementById('speedToggleBtn').addEventListener('click', () => {
-      if (currentSpeechRate === 0.70) {
+      if (currentSpeechRate === 0.55) {
+        currentSpeechRate = 0.70;
+        document.getElementById('speedIcon').textContent = '🚶';
+        document.getElementById('speedText').textContent = '0.70x 慢速';
+        showToast('🚶 語速：0.70x 慢速');
+      } else if (currentSpeechRate === 0.70) {
         currentSpeechRate = 0.85;
         document.getElementById('speedIcon').textContent = '🐰';
         document.getElementById('speedText').textContent = '0.85x 標準';
-        showToast('🐰 已切換為標準語速 (0.85x)');
+        showToast('🐰 語速：0.85x 標準');
       } else {
-        currentSpeechRate = 0.70;
+        currentSpeechRate = 0.55;
         document.getElementById('speedIcon').textContent = '🐢';
-        document.getElementById('speedText').textContent = '0.7x 慢速';
-        showToast('🐢 已切換為清晰慢速 (0.70x)');
+        document.getElementById('speedText').textContent = '0.55x 極慢';
+        showToast('🐢 語速：0.55x 極慢（逐音清晰）');
       }
     });
 
@@ -1772,6 +1777,14 @@
       });
     }
 
+        // 自動清除舊版快取，強制載入最新版
+    if ('caches' in window) {
+      caches.keys().then((names) => {
+        names.forEach((name) => {
+          if (name !== 'n5-flashcards-v4') caches.delete(name);
+        });
+      });
+    }
     initSpeechVoices();
     rebuildQueue();
   </script>

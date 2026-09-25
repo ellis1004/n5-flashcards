@@ -336,23 +336,38 @@
       justify-content: center;
       text-align: center;
       margin: auto 0;
-      gap: 8px;
-    }
-
-    .furigana-reading {
-      font-size: 1.65rem;
-      font-weight: 600;
-      color: #64748B;
-      letter-spacing: 0.08em;
-      min-height: 2.2rem;
+      gap: 20px;
     }
 
     .kanji-word {
-      font-size: 4.4rem;
+      font-size: 5.2rem;
       font-weight: 900;
       color: #0F172A;
       line-height: 1.15;
       letter-spacing: 0.04em;
+    }
+
+    .back-pronounce-row {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+
+    .back-kana-display {
+      font-size: 2.5rem;
+      font-weight: 900;
+      color: var(--primary);
+      letter-spacing: 0.08em;
+      line-height: 1.2;
+    }
+
+    .back-kanji-sub {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #64748B;
+      margin-bottom: 8px;
     }
 
     .front-sound-action {
@@ -895,6 +910,9 @@
       </div>
 
       <div class="top-actions">
+        <button class="icon-btn" id="speedToggleBtn" title="點擊切換朗讀語速">
+          <span id="speedIcon">🐢</span> <span id="speedText">0.7x 慢速</span>
+        </button>
         <button class="icon-btn" id="shuffleBtn" title="打亂單字順序">
           <span>🔀</span> 洗牌
         </button>
@@ -948,17 +966,16 @@
           </div>
 
           <div class="card-front-center">
-            <div class="furigana-reading" id="frontKana">いく</div>
             <div class="kanji-word" id="frontKanji">行く</div>
             <div class="front-sound-action">
               <button class="audio-btn" id="frontAudioBtn" type="button">
-                <span>🔊</span> 朗讀單字
+                <span>🔊</span> 慢速發音
               </button>
             </div>
           </div>
 
           <div class="card-footer-hint">
-            <span>👆 點擊卡片翻面看中文釋義 ↷</span>
+            <span>👆 點擊卡片翻面看假名讀音與釋義 ↷</span>
           </div>
         </div>
 
@@ -971,10 +988,12 @@
 
           <div class="card-back-center">
             <div class="meaning-block">
-              <div class="meaning-text" id="backMeaning">去</div>
-              <div class="word-preview-pill">
-                <span id="backWordPreview">行く 【いく】</span>
+              <div class="back-pronounce-row">
+                <div class="back-kana-display" id="backKana">いく</div>
+                <button class="example-audio-mini" id="backWordAudioBtn" type="button" title="重新朗讀單字" style="width:36px;height:36px;min-width:36px;font-size:1rem;">🔊</button>
               </div>
+              <div class="back-kanji-sub" id="backWordPreview">【 行く 】</div>
+              <div class="meaning-text" id="backMeaning">去</div>
             </div>
 
             <!-- 生活例句區塊 -->
@@ -1133,6 +1152,7 @@
     let currentIndex = 0;
     let isFlipped = false;
     let currentTab = 'csv'; // 'csv' or 'json'
+    let currentSpeechRate = 0.70; // 預設 0.70 超清晰慢速，專為初學者聽清每一個音節設計
 
     function loadWords() {
       try {
@@ -1194,7 +1214,7 @@
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'ja-JP';
-      utterance.rate = 0.85; // 專為學習者調降語速至 0.85
+      utterance.rate = currentSpeechRate; // 套用當前慢速設定 (0.70x)
       utterance.pitch = 1.0;
       if (jaVoice) {
         utterance.voice = jaVoice;
@@ -1290,21 +1310,21 @@
       document.getElementById('currentProgressText').textContent = `${currentIndex + 1} / ${currentQueue.length}`;
       const counterText = `# ${currentIndex + 1} / ${currentQueue.length}`;
 
-      // 正面內容
+      // 正面內容（無假名拼音，純測驗漢字識別）
       const frontPos = document.getElementById('frontPosBadge');
       frontPos.className = `pos-badge ${posClass}`;
       frontPos.textContent = word.pos;
       document.getElementById('frontCardCounter').textContent = counterText;
-      document.getElementById('frontKana').textContent = word.kana;
       document.getElementById('frontKanji').textContent = word.kanji;
 
-      // 背面內容
+      // 背面內容（顯示超清晰假名拼音、漢字與中文翻譯）
       const backPos = document.getElementById('backPosBadge');
       backPos.className = `pos-badge ${posClass}`;
       backPos.textContent = word.pos;
       document.getElementById('backCardCounter').textContent = counterText;
+      document.getElementById('backKana').textContent = word.kana;
+      document.getElementById('backWordPreview').textContent = `【 ${word.kanji} 】`;
       document.getElementById('backMeaning').textContent = word.meaning;
-      document.getElementById('backWordPreview').textContent = `${word.kanji} 【${word.kana}】`;
       document.getElementById('backExampleJa').textContent = word.exampleJa || '—';
       document.getElementById('backExampleZh').textContent = word.exampleZh || '';
 
@@ -1574,13 +1594,35 @@
       toggleFlip();
     });
 
-    // 朗讀單字按鈕
+    // 朗讀單字按鈕（正面）
     document.getElementById('frontAudioBtn').addEventListener('click', (e) => {
       e.stopPropagation();
       if (currentQueue.length === 0) return;
       const word = currentQueue[currentIndex];
-      // 朗讀假名以確保日本漢字發音最精準
       speakText(word.kana || word.kanji, e.currentTarget);
+    });
+
+    // 朗讀單字按鈕（背面假名拼音旁）
+    document.getElementById('backWordAudioBtn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (currentQueue.length === 0) return;
+      const word = currentQueue[currentIndex];
+      speakText(word.kana || word.kanji, e.currentTarget);
+    });
+
+    // 語速切換按鈕 (0.7x 慢速 <-> 0.85x 標準)
+    document.getElementById('speedToggleBtn').addEventListener('click', () => {
+      if (currentSpeechRate === 0.70) {
+        currentSpeechRate = 0.85;
+        document.getElementById('speedIcon').textContent = '🐰';
+        document.getElementById('speedText').textContent = '0.85x 標準';
+        showToast('🐰 已切換為標準語速 (0.85x)');
+      } else {
+        currentSpeechRate = 0.70;
+        document.getElementById('speedIcon').textContent = '🐢';
+        document.getElementById('speedText').textContent = '0.7x 慢速';
+        showToast('🐢 已切換為清晰慢速 (0.70x)');
+      }
     });
 
     // 朗讀例句按鈕
